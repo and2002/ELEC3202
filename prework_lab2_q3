@@ -1,0 +1,58 @@
+import cmath
+import math
+import numpy
+import matplotlib.pyplot as plt
+N = 100
+#transformer impedance
+Zt = 0.15j
+#load impedadance Zl
+Vpu = 1
+set = 1.025
+V1 = Vpu
+V2 = Vpu*set
+sin_alfa = [-0.9,-0.8,-0.7,-0.6,-0.5,-0.4,-0.3,-0.2,-0.1,0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+sin_beta = [-0.9,-0.8,-0.7,-0.6,-0.5,-0.4,-0.3,-0.2,-0.1,0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9]
+plt.figure(1)
+Matrix = numpy.zeros((6,N*(len(sin_beta)**2)))
+Matrix_sup = numpy.zeros((3,N-2))
+plt.xlabel('Zload')
+plt.ylabel('P')
+t = 0
+for i2 in range(len(sin_alfa)):
+    cos_alfa = math.sqrt(1-sin_alfa[i2]**2)
+    for i3 in range(2,N):
+        Zl = complex(i3/10*cos_alfa,i3/10*sin_alfa[i2])
+        I1 = (V1*(1+Zt/Zl)-V2)/(2*Zt+Zt**2/Zl)
+        I2 = (V2 * (1 + Zt / Zl) - V1) / (2 * Zt + Zt ** 2 / Zl)
+        P1 = abs(I1.conjugate() * (V1-I1*Zt))
+        P2 = abs(I2.conjugate() * (V2-I2*Zt))
+        Matrix[0,t] = set
+        Matrix[1,t] = cos_alfa
+        Matrix[2,t] = sin_alfa[i2]
+        Matrix[3,t] = abs(Zl)
+        Matrix[4,t] = P1
+        Matrix[5,t] = P2
+        t = t + 1
+        print(t)
+for i1 in range(len(sin_alfa)):
+    for i2 in range(0,N-2):
+        Matrix_sup[0,i2] = Matrix[3,i1*(N-2)+i2]
+        Matrix_sup[1, i2] = Matrix[4, i1 * (N - 2) + i2]
+        Matrix_sup[2, i2] = Matrix[5, i1 * (N - 2) + i2]
+    plt.plot(Matrix_sup[0], Matrix_sup[1], "b") #P1
+    plt.plot(Matrix_sup[0], Matrix_sup[2], "r") #P2
+    if (sin_alfa[i1] > 0):
+        char = "inductive"
+    else:
+        char = "capasitive"
+    title = "sin alfa = " + str(sin_alfa[i1])+char
+    plt.title(title)
+    plt.savefig("C:/testpy/ELEC3202_prework2_3/"+str(title) + ".png", bbox_inches='tight')
+    plt.show()
+print(Matrix)
+file_name = "C:/testpy/data_prelab.txt"
+file2 = open(file_name, "w")  ## open file
+file2.write("set"+"\t"+"cos"+"\t"+"sin"+"\t"+"\t"+"Z"+"\t"+"S1"+"\t"+"S2"+"\n")
+for i in range(t):
+    file2.write(str(Matrix[0,i])+"\t"+str(Matrix[1,i])+"\t"+str(Matrix[2,i])+"\t"+str(Matrix[3,i])+"\t"+str(Matrix[4,i])+"\t"+str(Matrix[5,i])+"\n")
+    #+"\t"+str(Matrix[6,i])+"\t"+str(Matrix[7,i])+"\n")  ## convertion to array: each line is element
