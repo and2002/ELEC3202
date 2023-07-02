@@ -1,0 +1,698 @@
+import sys
+import os
+import traceback
+import numpy as np
+from PyQt6.QtWidgets import *#QApplication, QWidget, QPushButton, QVBoxLayout, QDialog, QLineEdit, QLabel
+from PyQt6.QtCore import Qt
+from functools import partial
+Def_file = "ex"
+User_file = "ex"
+number_of_buses = 2
+number_of_lines = 1
+flag = 0 # 0 - error, 1 - suggested file is correct, 2 - build is correct
+flag_line = 0 # 0 not enough lines, 1 - okay
+flag_bus = 0 # 0 not enough bus, 1 - okay
+flag_bus_type = 0 # 0 - not enough slack bus, 1 -okay
+flag_bus_value = 0 # 0 - error in types in bus description, 1 - okay
+flag_line_type = 0 # 0 - error in type, 1 - okay
+
+typelines = 0
+connections = 0
+P = None
+V = None
+PL = None
+QL = None
+Bustype = ""
+r = None
+x = None
+b = None
+Ymatrix = None
+
+def Check_file(name):
+    global flag
+    flag = 0
+
+    if os.path.exists(name) and os.path.isfile(name) and os.path.isabs(name):
+        flag = 1
+
+def Convert_file_name(name):
+    name = name.replace('"', '')
+    name = name.replace("\\", "/")
+    return name
+
+def Calculate_Y_matrix():
+    global typelines
+    global connections
+    global r,x,b
+    global number_of_buses
+    global Ymatrix
+    Ymatrix = np.matrix(np.zeros((int(number_of_buses), int(number_of_buses))))
+    print(typelines)
+    print(connections)
+    print(r,x,b)
+    for main_deg in range(int(number_of_buses)):
+        for i in range(int(number_of_buses)):
+            if (int(connections[main_deg,i]) > 0):
+                c = int(connections[main_deg,i] - 1)
+                print("c"+str(c))
+                print("r" + str(float(r[c])))
+                print("x" + str(float(x[c])))
+                print("b" + str(float(b[c])))
+                A = complex(float(b[c]) - float(x[c])/float(float(r[c])**2 + float(x[c])**2), float(r[c])/float(float(r[c])**2 + float(x[c])**2))
+                #Ymatrix[main_deg, main_deg] = A
+                print(A)
+    print(Ymatrix)
+class FirstWidget(QWidget): #start widget
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("First Widget")
+
+        button1 = QPushButton("Load from file")
+        button1.clicked.connect(self.open_1_widget)
+
+        button2 = QPushButton("Build network manually")
+        button2.clicked.connect(self.open_2_widget)
+
+        button3 = QPushButton("Calculate")
+        button3.clicked.connect(self.open_3_widget)
+
+        button4 = QPushButton("Close")
+        button4.clicked.connect(self.close)
+
+        layout = QVBoxLayout()
+        layout.addWidget(button1)
+        layout.addWidget(button2)
+        layout.addWidget(button3)
+        layout.addWidget(button4)
+
+        self.setLayout(layout)
+        self.show()
+
+    def open_1_widget(self):
+        second_widget = SecondWidget(self)
+        second_widget.exec()
+
+    def open_2_widget(self):
+        third_widget = Build_man_Widget(self)
+        third_widget.exec()
+
+    def open_3_widget(self):
+        forth_widget = calculate(self)
+        forth_widget.exec()
+
+class calculate(QDialog): #enter bus details (slack, PV, PQ)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Calculate")
+        #self.setModal(True)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.resize(270, 170)
+
+        global flag_bus_type
+        global flag_bus_value
+        global flag_line_type
+        global flag_bus
+        global flag_line
+
+        self.label_1 = QLabel(self)
+        self.label_1.setText("Check list:")
+        self.label_1.move(15, 10)
+        self.label_1.show()
+
+        self.label_2 = QLabel(self)
+        self.label_2.setText("Amount of lines check:")
+        self.label_2.move(15, 30)
+        self.label_2.show()
+
+        self.label_3 = QLabel(self)
+        self.label_3.setText(str(bool(flag_line)))
+        self.label_3.move(220, 30)
+        self.label_3.show()
+
+        self.label_4 = QLabel(self)
+        self.label_4.setText("Amount of bus check:")
+        self.label_4.move(15, 50)
+        self.label_4.show()
+
+        self.label_5 = QLabel(self)
+        self.label_5.setText(str(bool(flag_line)))
+        self.label_5.move(220, 50)
+        self.label_5.show()
+
+        self.label_6 = QLabel(self)
+        self.label_6.setText("Correct data entered into line section:")
+        self.label_6.move(15, 70)
+        self.label_6.show()
+
+        self.label_7 = QLabel(self)
+        self.label_7.setText(str(bool(flag_line_type)))
+        self.label_7.move(220, 70)
+        self.label_7.show()
+
+        self.label_8 = QLabel(self)
+        self.label_8.setText("Only one Slack bus:")
+        self.label_8.move(15, 90)
+        self.label_8.show()
+
+        self.label_9 = QLabel(self)
+        self.label_9.setText(str(bool(flag_bus_type)))
+        self.label_9.move(220, 90)
+        self.label_9.show()
+
+        self.label_10 = QLabel(self)
+        self.label_10.setText("Correct data entered into bus section:")
+        self.label_10.move(15, 110)
+        self.label_10.show()
+
+        self.label_11 = QLabel(self)
+        self.label_11.setText(str(bool(flag_bus_value)))
+        self.label_11.move(220, 110)
+        self.label_11.show()
+
+        button1 = QPushButton("Continue", self)
+        button1.clicked.connect(self.calculate)
+        button1.move(140, 140)  # Adjust the position of the OK button
+        button1.setEnabled(False)
+        button1.show()
+
+        button2 = QPushButton("Close", self)
+        button2.clicked.connect(self.close)
+        button2.move(40, 140)  # Adjust the position of the Close button
+        button2.show()
+
+        if (flag_line_type == 1) and (flag_bus_type == 1) and (flag_bus_value == 1) and (flag_bus == 1) and (flag_line == 1):
+            button1.setEnabled(True)
+
+    def calculate(self):
+        print("yyyy")
+        Calculate_Y_matrix()
+class SecondWidget(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Load from file")
+        self.setModal(True)
+        self.resize(520, 70)
+
+        self.line = QLineEdit(self)
+        self.line.move(20, 25)
+        self.line.resize(400, 30)
+        self.line.setText(User_file)  # Set the initial text to User_file
+        self.line.textChanged.connect(self.update_user_file)  # Connect the textChanged signal to the update_user_file slot
+        self.line.show()
+
+        self.label = QLabel(self)
+        self.label.setText(f"Write file adress")
+        self.label.move(20, 7)
+        self.label.show()
+
+        button1 = QPushButton("OK", self)
+        button1.clicked.connect(self.check_and_load)
+        button1.move(430, 10)
+        button1.show()
+
+        button2 = QPushButton("Close", self)
+        button2.clicked.connect(self.close)
+        button2.move(430, 40)
+        button2.show()
+
+    def update_user_file(self, text):
+        global User_file
+        User_file = text
+
+    def check_and_load(self):
+        global User_file
+        global flag
+        User_file = Convert_file_name(User_file)
+        Check_file(User_file)
+        print(User_file, flag)
+
+class Build_man_Widget(QDialog): # enter basic information about grid
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Build network manually")
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.resize(320, 130)
+
+        self.line1 = QLineEdit(self)
+        self.line1.move(250, 25)
+        self.line1.resize(50, 25)
+        self.line1.setText(str(number_of_buses))  # Convert number_of_buses to a string
+        self.line1.textChanged.connect(self.update_number_of_buses)
+        self.line1.show()
+
+        self.line2 = QLineEdit(self)
+        self.line2.move(250, 55)
+        self.line2.resize(50, 25)
+        self.line2.setText(str(number_of_lines))  # Convert number_of_lines to a string
+        self.line2.textChanged.connect(self.update_number_of_lines)
+        self.line2.show()
+
+        self.label1 = QLabel(self)
+        self.label1.setText("Please, enter the following details:")
+        self.label1.move(20, 7)
+        self.label1.show()
+
+        self.label2 = QLabel(self)
+        self.label2.setText("Amount of buses (at least 2):")
+        self.label2.move(20, 30)
+        self.label2.show()
+
+        self.label1 = QLabel(self)
+        self.label1.setText("Amount of TYPES of lines (at least 1):")
+        self.label1.move(20, 60)
+        self.label1.show()
+
+        button1 = QPushButton("OK", self)
+        button1.clicked.connect(self.check_and_load)
+        button1.move(20, 90)
+        button1.show()
+
+        button2 = QPushButton("Close", self)
+        button2.clicked.connect(self.close)
+        button2.move(120, 90)
+        button2.show()
+
+        self.button3 = QPushButton("Continue", self)
+        self.button3.clicked.connect(self.open_select_data)  # Connect to open_select_data method
+        self.button3.setEnabled(False)
+        self.button3.move(220, 90)
+        self.button3.show()
+
+    def open_select_data(self):
+        select_data_widget = Select_data(self)
+        select_data_widget.exec()
+
+    def update_number_of_lines(self, text):
+        global number_of_lines
+        number_of_lines = text
+
+    def update_number_of_buses(self, text):
+        global number_of_buses
+        number_of_buses = text
+
+    def check_and_load(self):
+        global number_of_buses
+        global number_of_lines
+        global flag_line
+        global flag_bus
+        #generating global variables
+        global P, V, PL, QL #for buses
+        global r,x, b # for lines
+        global Bustype
+        global typeslines
+        global connections
+        if int(number_of_lines) < 1:
+            flag_line = 0
+        else:
+            flag_line = 1
+        if int(number_of_buses) < 2:
+            flag_bus = 0
+        else:
+            flag_bus = 1
+        if flag_bus == 1 and flag_line == 1:
+            self.button3.setEnabled(True)
+            P = [0] * int(number_of_buses)
+            V = [0] * int(number_of_buses)
+            PL = [0] * int(number_of_buses)
+            QL = [0] * int(number_of_buses)
+            r = [0] * int(number_of_lines)
+            x = [0] * int(number_of_lines)
+            b = [0] * int(number_of_lines)
+            Bustype = ["Slack"] * int(number_of_buses)
+            connections = np.matrix(np.zeros((int(number_of_buses), int(number_of_buses)))) # define connection diagram
+            typeslines = ["0000"]+["S"] * int(number_of_lines)
+        else:
+            self.button3.setEnabled(False)
+        print("line: ", str(flag_line), "bus: ", str(flag_bus))
+
+class Select_data(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Select fields")
+        self.setModal(True)
+        self.resize(320, 130)
+
+        button_l1 = QPushButton("Fill in bus parameters", self)
+        button_l1.clicked.connect(self.bus_data_enter)
+        button_l1.move(20, 10)
+        button_l1.show()
+
+        button_l2 = QPushButton("Fill in line parameters", self)
+        button_l2.clicked.connect(self.line_data_enter)
+        button_l2.move(20, 40)
+        button_l2.show()
+
+        button_l3 = QPushButton("Fill connections diagram", self)
+        button_l3.clicked.connect(self.connections_widget_open)
+        button_l3.move(20, 70)
+        button_l3.show()
+
+    def bus_data_enter(self):
+        bus_data_widget = bus_data(self)
+        bus_data_widget.exec()
+
+    def connections_widget_open(self):
+        try:
+            connec_widget = connect(self)
+            connec_widget.exec()
+        except Exception as e:
+            traceback.print_exc()
+
+    def line_data_enter(self):
+        try:
+            linedata_widget = line_data(self)
+            linedata_widget.exec()
+        except Exception as e:
+            traceback.print_exc()
+
+class bus_data(QDialog): #enter bus details (slack, PV, PQ)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        global P
+        global V
+        global PL
+        global QL
+        global Bustype
+        self.setWindowTitle("Select fields")
+        #self.setModal(True)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.resize(350, len(P)*30+80)
+
+        self.line_edits_P = []
+        self.line_edits_V = []
+        self.line_edits_PL = []
+        self.line_edits_QL = []
+        self.combos = []
+        self.label_M = []
+
+        self.label_1 = QLabel(self)
+        self.label_1.setText("Bus №")
+        self.label_1.move(15, 10)
+        self.label_1.show()
+
+        self.label_2 = QLabel(self)
+        self.label_2.setText("Bus type")
+        self.label_2.move(60, 10)
+        self.label_2.show()
+
+        self.label_3 = QLabel(self)
+        self.label_3.setText("P gen")
+        self.label_3.move(135, 10)
+        self.label_3.show()
+
+        self.label_4 = QLabel(self)
+        self.label_4.setText("V bus")
+        self.label_4.move(190, 10)
+        self.label_4.show()
+
+        self.label_5 = QLabel(self)
+        self.label_5.setText("P load")
+        self.label_5.move(245, 10)
+        self.label_5.show()
+
+        self.label_6 = QLabel(self)
+        self.label_6.setText("Q load")
+        self.label_6.move(295, 10)
+        self.label_6.show()
+        for i in range(len(P)):
+            line_edit_P = QLineEdit(self)
+            line_edit_P.move(125, 30 + i * 30)  # Adjust the position of each line
+            line_edit_P.resize(50, 25)
+            line_edit_P.setText(str(P[i]))  # Set the initial text to P[i]
+            line_edit_P.textChanged.connect(partial(self.update_P, count=i))  # Connect the textChanged signal with the lambda function
+            line_edit_P.show()
+
+            line_edit_V = QLineEdit(self)
+            line_edit_V.move(180, 30 + i * 30)  # Adjust the position of each line
+            line_edit_V.resize(50, 25)
+            line_edit_V.setText(str(V[i]))  # Set the initial text to V[i]
+            line_edit_V.textChanged.connect(partial(self.update_V, count=i))  # Connect the textChanged signal with the lambda function
+            line_edit_V.show()
+
+            line_edit_PL = QLineEdit(self)
+            line_edit_PL.move(235, 30 + i * 30)  # Adjust the position of each line
+            line_edit_PL.resize(50, 25)
+            line_edit_PL.setText(str(PL[i]))  # Set the initial text to V[i]
+            line_edit_PL.textChanged.connect(partial(self.update_PL, count=i))  # Connect the textChanged signal with the lambda function
+            line_edit_PL.show()
+
+            line_edit_QL = QLineEdit(self)
+            line_edit_QL.move(290, 30 + i * 30)  # Adjust the position of each line
+            line_edit_QL.resize(50, 25)
+            line_edit_QL.setText(str(QL[i]))  # Set the initial text to V[i]
+            line_edit_QL.textChanged.connect(partial(self.update_QL, count=i))  # Connect the textChanged signal with the lambda function
+            line_edit_QL.show()
+
+            combo = QComboBox(self)
+            combo.move(52, 32 + i * 30)
+            combo.addItems(["Slack", "PV-bus", "PQ_bus"])
+            combo.currentTextChanged.connect(partial(self.update_combo, count=i))
+            combo.show()
+
+            self.label_M = QLabel(self)
+            self.label_M.setText("Bus "+str(i))
+            self.label_M.move(15, 35+i*30)
+            self.label_M.show()
+
+            self.line_edits_P.append(line_edit_P)
+            self.line_edits_V.append(line_edit_V)
+            self.line_edits_PL.append(line_edit_PL)
+            self.line_edits_QL.append(line_edit_QL)
+            self.combos.append(combo)
+
+        button1 = QPushButton("OK", self)
+        button1.clicked.connect(self.check_bus_parameter)
+        button1.move(20, 60 + i * 30)  # Adjust the position of the OK button
+        button1.show()
+
+        button2 = QPushButton("Close", self)
+        button2.clicked.connect(self.close)
+        button2.move(120, 60 + i * 30)  # Adjust the position of the Close button
+        button2.show()
+
+    def update_P(self, text, count):
+        global P
+        P[count] = text
+        print(P)
+
+    def update_V(self, text, count):
+        global V
+        V[count] = text
+        print(V)
+
+    def update_PL(self, text, count):
+        global PL
+        PL[count] = text
+        print(PL)
+
+    def update_QL(self, text, count):
+        global QL
+        QL[count] = text
+        print(QL)
+
+    def check_bus_parameter(self): #check that only 1 slack bus
+        global flag_bus_type
+        global flag_bus_value
+        global P, V, QL, PL
+        c = 0
+        for i in range(len(P)):
+            if Bustype[i] == "Slack":
+                c = c + 1
+        if c == 1:
+            flag_bus_type = 1
+        else:
+            flag_bus_type = 0
+        print(Bustype)
+        print(flag_bus_type)
+        print(c)
+        arrays = [P, V, QL, PL]
+        flag_bus_value = 1
+        for array in arrays:
+            for element in array:
+                if not isinstance(element, (int, float, np.integer, np.floating)):
+                    flag_bus_value = 0
+        print("flag_bus_value" + str(flag_bus_value))
+    def update_combo(self, text, count):
+        global Bustype
+        Bustype[count] = text
+        print(text)
+class line_data(QDialog): #enter bus details (slack, PV, PQ)
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        global r
+        global x
+        global b
+        global Bustype
+        self.setWindowTitle("Select fields")
+        #self.setModal(True)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.resize(250, len(r)*30+80)
+
+        self.line_edits_r = []
+        self.line_edits_x = []
+        self.line_edits_b = []
+        self.label_M = []
+
+        self.label_1 = QLabel(self)
+        self.label_1.setText("line №")
+        self.label_1.move(15, 10)
+        self.label_1.show()
+
+        self.label_2 = QLabel(self)
+        self.label_2.setText("r")
+        self.label_2.move(100, 10)
+        self.label_2.show()
+
+        self.label_3 = QLabel(self)
+        self.label_3.setText("x")
+        self.label_3.move(160, 10)
+        self.label_3.show()
+
+        self.label_4 = QLabel(self)
+        self.label_4.setText("y")
+        self.label_4.move(210, 10)
+        self.label_4.show()
+
+        for i in range(len(r)):
+            line_edit_r = QLineEdit(self)
+            line_edit_r.move(75, 30 + i * 30)  # Adjust the position of each line
+            line_edit_r.resize(50, 25)
+            line_edit_r.setText(str(r[i]))  # Set the initial text to P[i]
+            line_edit_r.textChanged.connect(partial(self.update_r, count=i))  # Connect the textChanged signal with the lambda function
+            line_edit_r.show()
+
+            line_edit_x = QLineEdit(self)
+            line_edit_x.move(135, 30 + i * 30)  # Adjust the position of each line
+            line_edit_x.resize(50, 25)
+            line_edit_x.setText(str(x[i]))  # Set the initial text to V[i]
+            line_edit_x.textChanged.connect(partial(self.update_x, count=i))  # Connect the textChanged signal with the lambda function
+            line_edit_x.show()
+
+            line_edit_b = QLineEdit(self)
+            line_edit_b.move(195, 30 + i * 30)  # Adjust the position of each line
+            line_edit_b.resize(50, 25)
+            line_edit_b.setText(str(b[i]))  # Set the initial text to V[i]
+            line_edit_b.textChanged.connect(partial(self.update_b, count=i))  # Connect the textChanged signal with the lambda function
+            line_edit_b.show()
+
+            self.label_M = QLabel(self)
+            self.label_M.setText("line "+str(i+1))
+            self.label_M.move(15, 35+i*30)
+            self.label_M.show()
+
+            self.line_edits_r.append(line_edit_r)
+            self.line_edits_x.append(line_edit_x)
+            self.line_edits_b.append(line_edit_b)
+
+        button1 = QPushButton("OK", self)
+        button1.clicked.connect(self.check_value)
+        button1.move(20, 40 + len(r) * 30)  # Adjust the position of the OK button
+        button1.show()
+
+        button2 = QPushButton("Close", self)
+        button2.clicked.connect(self.close)
+        button2.move(120, 40 + len(r) * 30)  # Adjust the position of the Close button
+        button2.show()
+
+    def update_r(self, text, count):
+        global r
+        r[count] = text
+        print(r)
+
+    def update_x(self, text, count):
+        global x
+        x[count] = text
+        print(x)
+
+    def update_b(self, text, count):
+        global b
+        b[count] = text
+        print(b)
+
+    def check_value(self):
+        global r
+        global x
+        global b
+        global flag_line_type
+        arrays = [r, x, b]
+        flag_line_type = 1
+        for array in arrays:
+            for element in array:
+                if not isinstance(element, (int, float, np.integer, np.floating)):
+                    flag_line = 0
+        print("flag line type"+str(flag_line_type))
+
+class connect(QDialog): # connections widget ----------------------------------------------------------
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.init_ui()
+
+    def init_ui(self):
+        self.setWindowTitle("Bus connections")
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+
+        global number_of_buses
+        global number_of_lines
+        global connections
+        global typeslines
+        N = int(number_of_buses)
+
+        self.resize(N*55+80, N*30+100)
+
+        for i in range(1,int(number_of_lines)+1):
+            typeslines[i] = str(i)
+
+        self.combos = []
+
+        for row in range(N):
+            for col in range(N):
+                if row < col:
+                    combo = QComboBox(self)
+                    combo.move(col*55+50, row*30+40)
+                    combo.addItems(typeslines)
+                    combo.currentTextChanged.connect(partial(self.update_combo, countROW=row, countCOL=col))
+                    combo.show()
+                    self.combos.append(combo)
+
+        for i in range(N):
+            self.label_M1 = QLabel(self)
+            self.label_M1.setText("Bus " + str(i))
+            self.label_M1.move(15, 42 + i * 30)
+            self.label_M1.show()
+
+            self.label_M2 = QLabel(self)
+            self.label_M2.setText("Bus " + str(i))
+            self.label_M2.move(60 + i * 55, 10)
+            self.label_M2.show()
+    def update_combo(self, text, countROW, countCOL):
+        global connections
+        connections[countROW,countCOL] = text
+        connections[countCOL,countROW] = text
+        print(text)
+        print(connections)
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    first_widget = FirstWidget()
+    sys.exit(app.exec())
